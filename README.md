@@ -136,18 +136,6 @@ Detected attacks are packaged into standardized SOC payloads and transmitted ove
 
 ---
 
-## 💡 Key Engineering Decisions (Interview Talking Points)
-
-### 1. Why 98.4% Accuracy Over an Unrealistic 100%?
-In time-series ICS datasets, consecutive seconds have high autocorrelation. An unconstrained decision tree will memorize specific timestamps, resulting in an artificial "100%" test score that fails in production against unseen zero-day attacks. 
-By applying **hyperparameter regularization (`max_depth=12`, `min_samples_split=10`)**, the model was forced to learn physical invariants (e.g., flow vs. tank level rise rates). This delivers an honest, production-grade **98.4% accuracy** with **97.4% attack recall** and a **1.29% false alarm rate**.
-
-### 2. Physical Process Anomaly vs. Traditional Network IDS
-Standard network IDSs (e.g., Snort, Suricata, Zeek) check protocol headers (e.g., Modbus function code 05 or 15). They cannot detect semantic attacks where valid commands are sent to open valves or tamper with sensor setpoints. This ML IDS monitors the **Level 1/2 physical sensor state**, catching semantic attacks regardless of protocol legitimacy.
-
-### 3. Relevance to NIST SP 800-82 & Purdue Model
-* **Placement:** Operates across Level 1 (Sensors/Actuators) and Level 2 (Supervisory Control / SCADA).
-* **Cross-Zone Forwarding:** Transmits security telemetry across the OT/IT DMZ (Level 3.5) into enterprise SOC Splunk instances (Level 4/5) compliant with **NIST SP 800-82 Revision 3** guidelines.
 
 ---
 
