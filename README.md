@@ -45,38 +45,26 @@ This system bridges that gap by monitoring raw, high-frequency **Level 1/2 senso
 ## 🏗️ System Architecture
 
 ```
-                  SWaT Industrial Water Treatment Testbed
-          [51 Sensors & Actuators across 6 Physical Process Stages]
-                                     │
-                                     ▼
-        ┌────────────────────────────────────────────────────────┐
-        │        Data Sanitization & Preprocessing Pipeline      │
-        │  • Whitespace & schema strip                           │
-        │  • Feature imputation (sensor mean replacement)        │
-        │  • Stratified 80/20 train/test split (203k / 50.9k)    │
-        │  • StandardScaler z-score normalization                │
-        └────────────────────────────┬───────────────────────────┘
-                                     │
-                                     ▼
-        ┌────────────────────────────────────────────────────────┐
-        │      Regularized Random Forest Classifier Ensemble     │
-        │  • 100 Trees | max_depth=12 | min_samples_split=10     │
-        │  • Anti-overfitting regularization (guards 100% leak)  │
-        │  • Gini impurity feature attribution                   │
-        └────────────────────────────┬───────────────────────────┘
-                                     │
-                                     ▼
-        ┌────────────────────────────────────────────────────────┐
-        │        Inference, Confidence & Severity Engine         │
-        │  • Class probability distribution via predict_proba    │
-        │  • Severity Rule: Confidence > 0.85 ➔ HIGH else MEDIUM │
-        │  • Physical state payload construction                 │
-        └────────────────────────────┬───────────────────────────┘
-                                     │
-                                     ▼
-                  Splunk Cloud HTTP Event Collector (HEC)
-        [Live SOC Dashboard: Event Indexing, Alerting, Threat Triage]
+SWaT SCADA Dataset (51 Sensors & Actuators)
+                     │
+                     ▼
+  Data Preprocessing & Scaling (StandardScaler)
+                     │
+                     ▼
+   Random Forest Classifier (98.4% Accuracy)
+                     │
+                     ▼
+ Attack Detected ➔ Severity Tagging (HIGH / MEDIUM)
+                     │
+                     ▼
+Splunk Cloud SIEM (Real-Time SOC Alerts via HEC)
 ```
+
+### Simple 4-Step Pipeline:
+1. **Sensor Ingestion:** Reads telemetry from 51 physical sensors and actuators (flow rates, tank levels, pressure, chemical pH).
+2. **Preprocessing:** Cleans column names, fills missing values with column means, and scales data with `StandardScaler`.
+3. **ML Classification:** Random Forest analyzes the multi-sensor patterns to detect cyber-physical attacks with **98.4% accuracy**.
+4. **SOC Incident Response:** Pushes real-time alerts with confidence scores and severity tags (`HIGH` / `MEDIUM`) directly into **Splunk Cloud SIEM**.
 
 ---
 
