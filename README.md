@@ -1,83 +1,93 @@
 # SCADA/ICS Anomaly Detection System
-> AI-powered cyberattack detection on industrial control systems using machine learning and real-time SIEM integration
+> AI-powered cyberattack detection on industrial control systems using Random Forest and real-time SIEM integration
 
 ---
 
 ## Overview
-This project implements an end-to-end anomaly detection pipeline on the **SWaT (Secure Water Treatment) dataset** — a real industrial control system dataset from Singapore University of Technology (SUTD). The system detects cyberattacks on SCADA sensor readings using machine learning and forwards real-time alerts to a **Splunk SIEM dashboard** for SOC-style incident response.
+This project implements an end-to-end cyberattack detection pipeline on the **SWaT (Secure Water Treatment) dataset** — a real-world industrial control system (ICS/SCADA) dataset from the Singapore University of Technology and Design (SUTD). The system detects multi-stage cyber-physical attacks across 51 industrial sensors and actuators using a **Random Forest Classifier**, extracts critical sensor importances, and forwards real-time alerts with confidence and severity ratings to a **Splunk Cloud SIEM dashboard** for SOC incident response.
 
 ---
 
 ## Architecture
 ```
-SWaT ICS Dataset (51 sensors)
+SWaT ICS Dataset (51 sensors: flow, level, pressure, chemical)
         ↓
-Preprocessing (scaling, null handling, sliding window)
+Data Preprocessing (cleaning, mean imputation, label encoding)
         ↓
-┌─────────────────────────────────┐
-│  Isolation Forest (Unsupervised)│  → 82% F1 Score
-│  Random Forest   (Supervised)   │  → 100% Accuracy
-└─────────────────────────────────┘
+Stratified 80/20 Train-Test Split & StandardScaler Normalization
         ↓
-Attack Detected → FastAPI Endpoint
+┌──────────────────────────────────────────────┐
+│  Random Forest Classifier (Supervised)       │  → 100% Accuracy / 1.00 F1 Score
+│  Gini Feature Importance Sensor Analysis     │  → Identifies targeted sensors
+└──────────────────────────────────────────────┘
         ↓
-Splunk HEC → SIEM Dashboard (severity, confidence, sensor ID)
+Attack Detected (Confidence Scoring & Dynamic Severity Tagging)
+        ↓
+Splunk HTTP Event Collector (HEC) → SOC SIEM Dashboard
 ```
 
 ---
 
 ## Dataset
-- **Source:** SWaT Dataset — iTrust, Singapore University of Technology
-- **Size:** 1,387,098 normal rows + 54,621 attack rows
-- **Features:** 51 industrial sensors (flow, pressure, water level, chemical readings)
-- **Attack Types:** Sensor spoofing, actuator attacks, replay attacks, false data injection
+- **Source:** SWaT (Secure Water Treatment) Dataset — iTrust, Singapore University of Technology and Design (SUTD)
+- **Size:** 1,387,098 normal operating rows + 54,621 attack rows
+- **Features:** 51 industrial sensors and actuators across 6 physical water treatment stages
+- **Monitored Telemetry:** Flow indicators (`FIT101`), level transmitters (`LIT101`), chemical analyzers (`AIT202`), differential pressure indicators (`DPIT301`), motorized valves, and pumps
+- **Attack Types:** Sensor spoofing, actuator tampering, false data injection (FDI), and physical state manipulation
 
 ---
 
-## Models
+## Model Performance
 
-| Model | Type | Accuracy | F1 Score |
-|---|---|---|---|
-| Isolation Forest | Unsupervised | 82% | 0.81 |
-| Random Forest | Supervised | 100% | 1.00 |
+| Model | Type | Accuracy | Precision | Recall | F1-Score |
+|---|---|---|---|---|---|
+| **Random Forest** | Supervised Ensemble | **100%** | **1.00** | **1.00** | **1.00** |
 
-**Why two models?**
-- **Isolation Forest** simulates real-world scenarios where labeled attack data is unavailable — learns only from normal behavior
-- **Random Forest** demonstrates performance ceiling when labeled data exists — used for production alerting
+### Why Random Forest for SCADA/ICS?
+- **Non-Linear Physical Dynamics:** Industrial processes exhibit complex, non-linear correlations across multi-stage physical cycles (e.g., chemical dosing coupled with tank levels). Random Forest decision trees effectively capture these interactions without assumptions of linearity.
+- **Explainable Feature Importance:** Gini importance rankings pinpoint which physical sensors were manipulated during an attack, providing actionable root-cause telemetry to SOC analysts.
+- **Calibrated Probabilistic Confidence:** Utilizes `predict_proba` outputs to establish probabilistic confidence thresholds, dynamically routing alerts by severity (`HIGH` vs `MEDIUM`).
+- **Variance Mitigation:** Bagging (bootstrap aggregation) prevents overfitting on high-dimensional sensor noise and transient mechanical fluctuations.
 
 ---
 
 ## Tech Stack
-- **ML:** Python, Scikit-Learn, Pandas, NumPy, Matplotlib, Seaborn
-- **Environment:** Google Colab
-- **SIEM:** Splunk Cloud (HTTP Event Collector)
-- **Data:** SWaT ICS Dataset
+- **ML & Data Processing:** Python, Scikit-Learn, Pandas, NumPy, Matplotlib, Seaborn
+- **Environment:** Google Colab / Jupyter
+- **SIEM & Incident Response:** Splunk Cloud (HTTP Event Collector / HEC)
+- **Data Source:** SWaT ICS Testbed Dataset (iTrust)
 
 ---
 
-## Results
-- Detected **54,621 cyberattack instances** across 5 attack categories
-- Achieved **100% precision and recall** with Random Forest on held-out test set
-- Forwarded real-time attack alerts to Splunk with **severity tagging** (HIGH/MEDIUM) and **confidence scoring**
-- Built SOC-ready dashboard with total attack count, severity breakdown, and confidence trends
+## Results & Highlights
+- Successfully detected **54,621 cyberattack instances** across 5 distinct attack vectors.
+- Achieved **100% precision, recall, and F1-score** on the held-out stratified test dataset.
+- Computed **sensor feature importance** to isolate critical targets such as tank levels (`LIT101`) and inflow rates (`FIT101`).
+- Automated real-time alert dispatch to **Splunk Cloud HEC** with HTTP 200 delivery confirmation.
+- Built a SOC-ready alert payload including attack classification, confidence score, severity rating, and live sensor telemetry.
 
 ---
 
-## Splunk Dashboard
-Alerts sent to Splunk include:
+## Splunk Telemetry & Alert Structure
+Real-time alerts sent to the Splunk HTTP Event Collector adhere to the following SOC schema:
 ```json
 {
-  "alert_type"  : "CYBERATTACK DETECTED",
-  "severity"    : "HIGH",
-  "confidence"  : 0.99,
-  "sensors"     : {
-    "LIT101"  : 817.67,
-    "FIT101"  : 2.49,
-    "AIT202"  : 8.46,
-    "DPIT301" : 14.6
-  },
-  "timestamp"   : "2026-05-14 10:12:45",
-  "source"      : "SWaT_ICS_Anomaly_Detector"
+  "time": 1715681565,
+  "sourcetype": "scada_ids_alert",
+  "index": "main",
+  "event": {
+    "alert_type": "CYBERATTACK DETECTED",
+    "severity": "HIGH",
+    "confidence": 0.9984,
+    "sensors": {
+      "LIT101": 817.67,
+      "FIT101": 2.49,
+      "AIT202": 8.46,
+      "DPIT301": 14.6
+    },
+    "timestamp": "2026-05-14 10:12:45",
+    "source": "SWaT_ICS_Anomaly_Detector"
+  }
 }
 ```
 
@@ -85,10 +95,10 @@ Alerts sent to Splunk include:
 
 ## Setup & Usage
 
-### 1. Clone the repo
+### 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/scada-ids.git
-cd scada-ids
+git clone https://github.com/LazyButCaffeinated/SCADA-ICS-Anomaly-Detection-System.git
+cd SCADA-ICS-Anomaly-Detection-System
 ```
 
 ### 2. Install dependencies
@@ -97,38 +107,39 @@ pip install scikit-learn pandas numpy matplotlib seaborn requests
 ```
 
 ### 3. Add dataset
-Download SWaT dataset from [Kaggle](https://www.kaggle.com) and place:
+Download the SWaT dataset from [Kaggle](https://www.kaggle.com/datasets/vishala28/swat-dataset-secure-water-treatment-system) and place the files:
 ```
-data/
+Datasets/
 ├── normal.csv
 └── attack.csv
 ```
 
-### 4. Configure Splunk
+### 4. Configure Splunk Cloud HEC
+In `scada.ipynb`, update your Splunk HTTP Event Collector endpoint and authorization token:
 ```python
-SPLUNK_URL   = "https://your-instance.splunkcloud.com:8088/services/collector/event"
-SPLUNK_TOKEN = "your-hec-token"
+SPLUNK_URL   = "https://<your-instance>.splunkcloud.com:8088/services/collector/event"
+SPLUNK_TOKEN = "<your-hec-token>"
 ```
 
 ### 5. Run the notebook
-Open `scada_ids.ipynb` in Google Colab and run all cells.
+Open `scada.ipynb` in Google Colab or your local Jupyter environment and execute all cells sequentially.
 
 ---
 
 ## Key Concepts Demonstrated
-- **Unsupervised vs Supervised anomaly detection** — practical comparison on real ICS data
-- **Class imbalance handling** — normal vs attack data distribution
-- **SIEM integration** — real-time alert forwarding via Splunk HEC
-- **Industrial cybersecurity** — OT/ICS threat detection aligned with NIST ICS security framework
+- **Supervised Cyber-Physical Intrusion Detection:** Classifying stealthy sensor tampering and actuator attacks in critical infrastructure.
+- **Root-Cause Sensor Attribution:** Leveraging tree-based feature importance to identify which industrial process points were compromised.
+- **SIEM Integration:** Bridging operational technology (OT) sensor telemetry with enterprise security operations (Splunk HEC).
+- **Industrial Cybersecurity Alignment:** Implementing monitoring principles aligned with the **NIST SP 800-82** Guide to Industrial Control Systems (ICS) Security and the **Purdue Enterprise Reference Architecture**.
 
 ---
 
 ## Relevance to Industry
-Industrial control systems are a prime target for cyberattacks — Stuxnet (2010), Ukraine Power Grid (2015), and Oldsmar Water Plant (2021) demonstrate the real-world impact of ICS vulnerabilities. This project addresses that threat using modern ML-based anomaly detection directly applicable to manufacturing, energy, and water treatment environments.
+Industrial control systems are high-value targets for nation-state threat actors and cyber-sabotage — as evidenced by Stuxnet (2010), the Ukrainian Power Grid attacks (2015/2016), and the Oldsmar Water Treatment facility intrusion (2021). This project addresses critical infrastructure defense by combining machine learning anomaly detection with automated SOC escalation.
 
 ---
 
 ## Author
-**Rajat Bhat**
-M.E. Cyber Security — Manipal School of Information Sciences
+**Rajat Bhat**  
+M.E. Cyber Security — Manipal School of Information Sciences  
 [LinkedIn](https://linkedin.com/in/rajat-bhat-139152341/) | rajatbhat0703@gmail.com
